@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"net"
 	"strings"
 
+	"github.com/projectdiscovery/dnsx/libs/dnsx"
 	"github.com/projectdiscovery/subfinder/v2/pkg/passive"
 	"github.com/projectdiscovery/subfinder/v2/pkg/resolve"
 )
@@ -41,17 +43,16 @@ func (r *Runner) initializePassiveEngine() {
 
 // initializeActiveEngine creates the resolver used to resolve the found subdomains
 func (r *Runner) initializeActiveEngine() error {
-	r.resolverClient = resolve.New()
+	var resolvers []string
 
 	// If the file has been provided, read resolvers from the file
 	if r.options.ResolverList != "" {
-		err := r.resolverClient.AppendResolversFromFile(r.options.ResolverList)
+		var err error
+		resolvers, err = loadFromFile(r.options.ResolverList)
 		if err != nil {
 			return err
 		}
 	}
-
-	var resolvers []string
 
 	if r.options.Resolvers != "" {
 		resolvers = append(resolvers, strings.Split(r.options.Resolvers, ",")...)
@@ -61,7 +62,19 @@ func (r *Runner) initializeActiveEngine() error {
 		resolvers = append(resolvers, resolve.DefaultResolvers...)
 	}
 
-	r.resolverClient.AppendResolversFromSlice(resolvers)
+	// Add default 53 UDP port if missing
+	for i, resolver := range resolvers {
+		if !strings.Contains(resolver, ":") {
+			resolvers[i] = net.JoinHostPort(resolver, "53")
+		}
+	}
+
+	r.resolverClient = resolve.New()
+	var err error
+	r.resolverClient.DNSClient, err = dnsx.New(dnsx.Options{BaseResolvers: resolvers, MaxRetries: 5})
+	if err != nil {
+		return nil
+	}
 
 	return nil
 }

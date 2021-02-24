@@ -1,4 +1,4 @@
-module github.com/projectdiscovery/subfinder/v2
+module github.com/projectdiscovery/subfinder
 
 go 1.15
 
